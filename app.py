@@ -1,4 +1,4 @@
-# app.py - EasySearch ครบ 4 ระบบ (True, TPMAP, Shipmile, Gambling)
+# app.py - EasySearch ครบ 4 ระบบ + Popup ติดตาม IG
 from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
@@ -293,7 +293,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         
         body {
             font-family: 'Kanit', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #0a0a0a;
             min-height: 100vh;
             padding: 16px;
         }
@@ -318,20 +318,26 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             align-items: center;
             justify-content: center;
             gap: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
         .header p {
             font-size: 14px;
-            opacity: 0.9;
+            opacity: 0.7;
+            color: #aaa;
         }
         
         /* Search Box */
         .search-box {
-            background: white;
+            background: #1a1a1a;
             border-radius: 24px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 1px solid #2a2a2a;
         }
         
         .search-input-area {
@@ -343,16 +349,22 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         .search-input {
             flex: 1;
             padding: 14px 18px;
-            border: 2px solid #e0e0e0;
+            border: 2px solid #2a2a2a;
             border-radius: 50px;
             font-size: 16px;
             font-family: 'Kanit', sans-serif;
+            background: #0a0a0a;
+            color: white;
             transition: all 0.3s;
         }
         
         .search-input:focus {
             outline: none;
             border-color: #667eea;
+        }
+        
+        .search-input::placeholder {
+            color: #555;
         }
         
         .search-btn {
@@ -379,16 +391,17 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         
         /* Results */
         .results {
-            background: white;
+            background: #1a1a1a;
             border-radius: 24px;
             padding: 20px;
             min-height: 400px;
+            border: 1px solid #2a2a2a;
         }
         
         .results-header {
             margin-bottom: 20px;
             padding-bottom: 12px;
-            border-bottom: 2px solid #f0f0f0;
+            border-bottom: 1px solid #2a2a2a;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -399,32 +412,28 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         .results-header h3 {
             font-size: 18px;
             font-weight: 600;
-            color: #333;
+            color: white;
         }
         
         .result-count {
-            color: #666;
+            color: #aaa;
             font-size: 14px;
-            background: #f5f5f5;
+            background: #0a0a0a;
             padding: 4px 12px;
             border-radius: 20px;
         }
         
         /* Result Cards */
         .result-card {
-            border: 1px solid #e8e8e8;
+            border: 1px solid #2a2a2a;
             border-radius: 16px;
             margin-bottom: 20px;
             overflow: hidden;
-            transition: box-shadow 0.2s;
-        }
-        
-        .result-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            background: #0f0f0f;
         }
         
         .result-header {
-            background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
+            background: linear-gradient(135deg, #1f1f2f 0%, #15151f 100%);
             padding: 14px 18px;
             font-weight: 600;
             font-size: 16px;
@@ -432,6 +441,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             display: flex;
             align-items: center;
             gap: 10px;
+            color: white;
         }
         
         .result-header i {
@@ -446,19 +456,19 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         .info-row {
             margin-bottom: 12px;
             padding-bottom: 8px;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid #2a2a2a;
         }
         
         .info-label {
             font-weight: 600;
-            color: #555;
+            color: #aaa;
             font-size: 13px;
             margin-bottom: 4px;
         }
         
         .info-value {
             font-size: 15px;
-            color: #222;
+            color: white;
             word-break: break-word;
         }
         
@@ -476,26 +486,27 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         }
         
         .data-table th {
-            background: #f8f9fa;
+            background: #0a0a0a;
             padding: 10px 8px;
             text-align: left;
             font-weight: 600;
-            color: #555;
-            border-bottom: 2px solid #e0e0e0;
+            color: #aaa;
+            border-bottom: 1px solid #2a2a2a;
         }
         
         .data-table td {
             padding: 10px 8px;
-            border-bottom: 1px solid #eee;
-            color: #333;
+            border-bottom: 1px solid #2a2a2a;
+            color: #ddd;
         }
         
         /* Person Card for TPMAP */
         .person-card {
-            background: #fafafa;
+            background: #0a0a0a;
             border-radius: 12px;
             padding: 14px;
             margin-bottom: 12px;
+            border: 1px solid #2a2a2a;
         }
         
         .person-card:last-child {
@@ -511,7 +522,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         .spinner {
             width: 40px;
             height: 40px;
-            border: 3px solid #f3f3f3;
+            border: 3px solid #2a2a2a;
             border-top: 3px solid #667eea;
             border-radius: 50%;
             animation: spin 1s linear infinite;
@@ -527,7 +538,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         .empty-state {
             text-align: center;
             padding: 50px 20px;
-            color: #999;
+            color: #666;
         }
         
         .empty-state i {
@@ -538,12 +549,12 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         
         /* Status Bar */
         .status-bar {
-            background: #f8f9fa;
+            background: #0a0a0a;
             padding: 10px 16px;
             border-radius: 12px;
             margin-top: 12px;
             font-size: 13px;
-            color: #666;
+            color: #aaa;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -582,8 +593,8 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         /* Badge */
         .badge {
             display: inline-block;
-            background: #e8f5e9;
-            color: #2e7d32;
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
             padding: 2px 8px;
             border-radius: 12px;
             font-size: 11px;
@@ -594,18 +605,18 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         .welfare-section {
             margin-top: 16px;
             padding-top: 12px;
-            border-top: 1px dashed #ddd;
+            border-top: 1px solid #2a2a2a;
         }
         
         .welfare-title {
             font-weight: 600;
             font-size: 13px;
-            color: #666;
+            color: #aaa;
             margin-bottom: 8px;
         }
         
         .json-preview {
-            background: #f5f5f5;
+            background: #0a0a0a;
             padding: 10px;
             border-radius: 8px;
             font-size: 11px;
@@ -613,6 +624,109 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             overflow-x: auto;
             white-space: pre-wrap;
             word-break: break-all;
+            color: #aaa;
+            border: 1px solid #2a2a2a;
+        }
+        
+        /* Popup Modal */
+        .popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .popup-modal {
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+            border-radius: 32px;
+            padding: 32px 24px;
+            max-width: 320px;
+            width: 85%;
+            text-align: center;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            animation: slideUp 0.3s ease;
+        }
+        
+        .popup-icon {
+            font-size: 64px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 16px;
+        }
+        
+        .popup-modal h2 {
+            color: white;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        
+        .popup-modal p {
+            color: #aaa;
+            font-size: 14px;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+        
+        .follow-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: linear-gradient(135deg, #E4405F 0%, #D62976 100%);
+            color: white;
+            padding: 14px 28px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            font-family: 'Kanit', sans-serif;
+            transition: transform 0.2s;
+            margin-bottom: 16px;
+        }
+        
+        .follow-btn:active {
+            transform: scale(0.97);
+        }
+        
+        .follow-btn i {
+            font-size: 20px;
+        }
+        
+        .skip-btn {
+            background: transparent;
+            border: none;
+            color: #666;
+            font-size: 13px;
+            cursor: pointer;
+            font-family: 'Kanit', sans-serif;
+            padding: 8px;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
     </style>
 </head>
@@ -661,6 +775,48 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         const resultsContainer = document.getElementById('resultsContainer');
         const resultCountSpan = document.getElementById('resultCount');
         const statusBar = document.getElementById('statusBar');
+        
+        // Popup Instagram
+        function showPopup() {
+            const popup = document.createElement('div');
+            popup.className = 'popup-overlay';
+            popup.id = 'igPopup';
+            popup.innerHTML = `
+                <div class="popup-modal">
+                    <div class="popup-icon">
+                        <i class="fab fa-instagram"></i>
+                    </div>
+                    <h2>ติดตามก่อนใช้งาน</h2>
+                    <p>กรุณากดติดตามเพื่อสนับสนุนเรา<br>และได้รับอัปเดตฟีเจอร์ใหม่ๆ</p>
+                    <a href="https://www.instagram.com/eedok.4/" target="_blank" class="follow-btn" id="followBtn">
+                        <i class="fab fa-instagram"></i>
+                        ติดตามบน Instagram
+                    </a>
+                    <br>
+                    <button class="skip-btn" id="skipBtn">ใช้ต่อโดยไม่ติดตาม</button>
+                </div>
+            `;
+            document.body.appendChild(popup);
+            
+            const followBtn = document.getElementById('followBtn');
+            const skipBtn = document.getElementById('skipBtn');
+            
+            followBtn.addEventListener('click', function() {
+                localStorage.setItem('ig_followed', 'true');
+                setTimeout(() => {
+                    popup.remove();
+                }, 500);
+            });
+            
+            skipBtn.addEventListener('click', function() {
+                popup.remove();
+            });
+        }
+        
+        // ตรวจสอบว่ากดติดตามแล้วหรือยัง
+        if (!localStorage.getItem('ig_followed')) {
+            showPopup();
+        }
         
         searchBtn.onclick = performSearch;
         keywordInput.onkeypress = function(e) {
@@ -894,7 +1050,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             });
             
             if (data.count > 30) {
-                html += `<tr><td colspan="5" style="text-align:center; color:#999;">แสดง 30 จาก ${data.count} รายการ</td></tr>`;
+                html += `<tr><td colspan="5" style="text-align:center; color:#666;">แสดง 30 จาก ${data.count} รายการ</td></tr>`;
             }
             
             html += `</tbody>
