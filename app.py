@@ -1,4 +1,4 @@
-# app.py - EasySearch (TPMAP, Shipmile, Gambling)
+# app.py - EasySearch ครบ 4 ระบบ (True, TPMAP, Shipmile, Gambling)
 from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
@@ -8,9 +8,21 @@ from datetime import datetime
 app = Flask(__name__)
 
 # ==================== CONFIG ====================
-# GitHub Releases URLs
 GAMBLING_DATA_URL = "https://github.com/Atom88888881/search/releases/download/w/gambling_data.json"
 SHIPMILE_DATA_URL = "https://github.com/Atom88888881/search/releases/download/w/shipsmile_address.json"
+
+# True Portal Cookies
+TRUE_COOKIES = {
+    "__cf_bm": "sm5sdjrPZzFME2ro3r9q3Z5WWN5YX7dHh4Wge0QbKnk-1774457484.184885-1.0.1.1-tqPVt8B8Ae26bChgntse8FHJrNNzEzcVoxxHH1cetxaiRwJgKIOCjg9SZ3aLV0BfoccB8Sm2wCVfsS0brxs88IiGFIz9PJ9F73FSAhWsULI1siTna6cycuUVpctRI9lG",
+    "_cfuvid": "7yRX5OPCgh8jFy_.dr9gadY8cB5UjvZaduerE2FyQns-1774457483.8987513-1.0.1.1-yRdomrMZO7KHAgBQTkB7qg2izFRBrdYAkYTB9bu4lt0",
+    "JSESSIONID": "w8KyY+19qmYKyOdQ1At3NwDU.SFF_node6",
+    "cf_clearance": "TfNusP6ofDEGGc7zhfZvWcEeKspmdBWj2IOZOjQf43U-1774457484-1.2.1.1-BgbH9yTE3IT4ddtBNidBG1qsw0yk_fEHVRIDBw_3Bu0RWDL06jP.J27peskuV_zCm109B77IpKuXFbrJL2PZPwqA_qQ9.Bhrv6SKdWZE9iRyxAGtTUZ_ln1DNQut2d8zT2oeEv4AwE80HqTNrUvZrfrZQFS6koROkeAFzOu6HDZ7r8irzzWWEc6RkxTZCg.acalATIkuUTBCv6UDWW4u_TfpB9c52CHxMeFLQ_vWOYU",
+    "dealer_prod_session": "6CitXY56FZH8ZMi4k8Vgiw|1774493490|MuH0Uzd5pzj5i4jpE8bMaxOVXro",
+    "NSC_WJQ_UNTBQQS-19180-19181": "ffffffffaf1baadb45525d5f4f58455e445a4a427cdd"
+}
+
+TRUE_USER = "17554398"
+TRUE_API = "https://sff-dealer.truecorp.co.th/profiles/customer/get"
 
 # TPMAP Cookies
 TPMAP_COOKIES = {
@@ -26,7 +38,7 @@ class GamblingDataManager:
     
     def load_from_url(self):
         try:
-            print(f"📥 Downloading gambling data from: {GAMBLING_DATA_URL}")
+            print(f"📥 Downloading gambling data...")
             response = requests.get(GAMBLING_DATA_URL, timeout=60)
             if response.status_code == 200:
                 json_data = response.json()
@@ -34,11 +46,9 @@ class GamblingDataManager:
                     self.data = json_data["data"]
                 elif isinstance(json_data, list):
                     self.data = json_data
-                print(f"✅ Gambling data loaded: {len(self.data)} records")
-            else:
-                print(f"❌ Failed to load: HTTP {response.status_code}")
+                print(f"✅ Gambling: {len(self.data)} records")
         except Exception as e:
-            print(f"❌ Error loading gambling data: {e}")
+            print(f"❌ Gambling error: {e}")
     
     def search(self, keyword):
         results = []
@@ -56,9 +66,6 @@ class GamblingDataManager:
                     results.append(item)
                     break
         return results
-    
-    def get_statistics(self):
-        return {'total': len(self.data)}
 
 class ShipmileDataManager:
     def __init__(self):
@@ -67,13 +74,13 @@ class ShipmileDataManager:
     
     def load_from_url(self):
         try:
-            print(f"📥 Downloading shipmile data from: {SHIPMILE_DATA_URL}")
+            print(f"📥 Downloading shipmile data...")
             response = requests.get(SHIPMILE_DATA_URL, timeout=60)
             if response.status_code == 200:
                 self.data = response.json()
-                print(f"✅ Shipmile data loaded: {len(self.data)} records")
+                print(f"✅ Shipmile: {len(self.data)} records")
         except Exception as e:
-            print(f"❌ Error loading shipmile data: {e}")
+            print(f"❌ Shipmile error: {e}")
     
     def search(self, keyword):
         results = []
@@ -85,6 +92,36 @@ class ShipmileDataManager:
             if keyword_lower in name or keyword_lower in phone or keyword_lower in address:
                 results.append(item)
         return results
+
+# ==================== TRUE PORTAL SERVICE ====================
+class TruePortalService:
+    def __init__(self):
+        self.cookies = TRUE_COOKIES
+        self.user = TRUE_USER
+    
+    def search(self, keyword):
+        if not keyword:
+            return None
+        
+        phone_clean = re.sub(r'\D', '', keyword)
+        if phone_clean and len(phone_clean) == 10:
+            url = f"{TRUE_API}?product-id-number={phone_clean}&product-id-name=msisdn"
+        elif phone_clean and len(phone_clean) == 13:
+            url = f"{TRUE_API}?product-id-number={phone_clean}&product-id-name=citizen-id"
+        else:
+            return None
+        
+        headers = {"channel_alias": "WHS", "employeeid": self.user}
+        try:
+            r = requests.get(url, headers=headers, cookies=self.cookies, timeout=15)
+            if r.status_code == 200:
+                data = r.json()
+                if data.get("response-data"):
+                    return data["response-data"]
+            return None
+        except Exception as e:
+            print(f"True API error: {e}")
+            return None
 
 # ==================== TPMAP SERVICE ====================
 class TPMAPService:
@@ -104,13 +141,13 @@ class TPMAPService:
             parts.append(village_name)
         tumbol_name = str(data.get("tumbol_name", "")) if data.get("tumbol_name") else ""
         if tumbol_name and tumbol_name != "-":
-            parts.append(f"ตำบล {tumbol_name}")
+            parts.append(f"ต.{tumbol_name}")
         ampuhur_name = str(data.get("ampuhur_name", "")) if data.get("ampuhur_name") else ""
         if ampuhur_name and ampuhur_name != "-":
-            parts.append(f"อำเภอ {ampuhur_name}")
+            parts.append(f"อ.{ampuhur_name}")
         province_name = str(data.get("province_name", "")) if data.get("province_name") else ""
         if province_name and province_name != "-":
-            parts.append(f"จังหวัด {province_name}")
+            parts.append(f"จ.{province_name}")
         zipcode = str(data.get("zipcode", "")) if data.get("zipcode") else ""
         if zipcode and zipcode != "-":
             parts.append(zipcode)
@@ -182,12 +219,13 @@ class TPMAPService:
             
             return people, welfare
         except Exception as e:
-            print(f"❌ TPMAP API error: {e}")
+            print(f"❌ TPMAP error: {e}")
             return None, None
 
-# ==================== INITIALIZE SERVICES ====================
+# ==================== INITIALIZE ====================
 gambling_manager = GamblingDataManager()
 shipmile_manager = ShipmileDataManager()
+true_service = TruePortalService()
 tpmap_service = TPMAPService()
 
 # ==================== FLASK ROUTES ====================
@@ -208,6 +246,10 @@ def api_search():
         'timestamp': datetime.now().isoformat(),
         'data': {}
     }
+    
+    # True CRM
+    true_data = true_service.search(keyword)
+    results['data']['true_portal'] = true_data if true_data else None
     
     # TPMAP
     people, welfare = tpmap_service.search(keyword)
@@ -232,75 +274,379 @@ def api_search():
     
     return jsonify(results)
 
-@app.route('/api/status', methods=['GET'])
-def api_status():
-    return jsonify({
-        'shipmile': {'records': len(shipmile_manager.data)},
-        'gambling': {'records': gambling_manager.get_statistics()['total']},
-        'tpmap': {'configured': True},
-        'timestamp': datetime.now().isoformat()
-    })
-
-# HTML Template
+# ==================== HTML TEMPLATE ====================
 HTML_TEMPLATE = '''<!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>EasySearch - ระบบค้นหาข้อมูล</title>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Kanit', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        .header { text-align: center; color: white; margin-bottom: 30px; }
-        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
-        .search-box { background: white; border-radius: 20px; padding: 30px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-        .search-input-area { display: flex; gap: 15px; margin-bottom: 20px; }
-        .search-input { flex: 1; padding: 15px 20px; border: 2px solid #ddd; border-radius: 30px; font-size: 16px; font-family: 'Kanit', sans-serif; }
-        .search-btn { padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 30px; cursor: pointer; font-size: 16px; font-weight: 600; }
-        .status { padding: 15px; background: #f8f9fa; border-radius: 10px; margin-bottom: 20px; }
-        .results { background: white; border-radius: 20px; padding: 20px; min-height: 400px; }
-        .result-card { border: 1px solid #e0e0e0; border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
-        .result-header { background: #f8f9fa; padding: 15px 20px; font-weight: 600; border-bottom: 2px solid #667eea; }
-        .result-body { padding: 20px; overflow-x: auto; }
-        .member-table { width: 100%; border-collapse: collapse; }
-        .member-table th, .member-table td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
-        .json-viewer { background: #f8f9fa; padding: 15px; border-radius: 8px; overflow-x: auto; font-family: monospace; font-size: 12px; }
-        .loading { text-align: center; padding: 50px; }
-        .spinner { width: 50px; height: 50px; border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .stat-card { background: white; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            font-family: 'Kanit', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 16px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        /* Header */
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 24px;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        /* Search Box */
+        .search-box {
+            background: white;
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .search-input-area {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 0;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 14px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 50px;
+            font-size: 16px;
+            font-family: 'Kanit', sans-serif;
+            transition: all 0.3s;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .search-btn {
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Kanit', sans-serif;
+            transition: transform 0.2s;
+        }
+        
+        .search-btn:active {
+            transform: scale(0.97);
+        }
+        
+        .search-btn:disabled {
+            opacity: 0.7;
+            transform: none;
+        }
+        
+        /* Results */
+        .results {
+            background: white;
+            border-radius: 24px;
+            padding: 20px;
+            min-height: 400px;
+        }
+        
+        .results-header {
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .results-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .result-count {
+            color: #666;
+            font-size: 14px;
+            background: #f5f5f5;
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+        
+        /* Result Cards */
+        .result-card {
+            border: 1px solid #e8e8e8;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: box-shadow 0.2s;
+        }
+        
+        .result-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        
+        .result-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
+            padding: 14px 18px;
+            font-weight: 600;
+            font-size: 16px;
+            border-bottom: 2px solid #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .result-header i {
+            font-size: 20px;
+        }
+        
+        .result-body {
+            padding: 16px;
+        }
+        
+        /* Info Row */
+        .info-row {
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #555;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        
+        .info-value {
+            font-size: 15px;
+            color: #222;
+            word-break: break-word;
+        }
+        
+        /* Table for Gambling/Shipmile */
+        .data-table {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .data-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        
+        .data-table th {
+            background: #f8f9fa;
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .data-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #eee;
+            color: #333;
+        }
+        
+        /* Person Card for TPMAP */
+        .person-card {
+            background: #fafafa;
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+        
+        .person-card:last-child {
+            margin-bottom: 0;
+        }
+        
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 50px 20px;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #999;
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        /* Status Bar */
+        .status-bar {
+            background: #f8f9fa;
+            padding: 10px 16px;
+            border-radius: 12px;
+            margin-top: 12px;
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Mobile Optimizations */
+        @media (max-width: 600px) {
+            body {
+                padding: 12px;
+            }
+            
+            .search-input-area {
+                flex-direction: column;
+            }
+            
+            .search-btn {
+                width: 100%;
+            }
+            
+            .result-header {
+                font-size: 14px;
+                padding: 12px 14px;
+            }
+            
+            .result-body {
+                padding: 12px;
+            }
+            
+            .data-table th,
+            .data-table td {
+                padding: 8px 6px;
+                font-size: 12px;
+            }
+        }
+        
+        /* Badge */
+        .badge {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        /* Welfare Section */
+        .welfare-section {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px dashed #ddd;
+        }
+        
+        .welfare-title {
+            font-weight: 600;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .json-preview {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-family: monospace;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1><i class="fas fa-search"></i> AtomSearch</h1>
-            <p>ระบบค้นหาข้อมูลอัจฉริยะ | TPMAP | Shipmile | เว็บพนัน</p>
+            <h1>
+                <i class="fas fa-search"></i>
+                AtomSearch
+            </h1>
+            <p>ค้นหาข้อมูลครบจบในที่เดียว | True | TPMAP | Shipmile | เว็บพนัน</p>
         </div>
         
         <div class="search-box">
             <div class="search-input-area">
-                <input type="text" id="keyword" class="search-input" placeholder="ชื่อ, เบอร์โทรศัพท์, หรือเลขบัตรประชาชน...">
-                <button id="searchBtn" class="search-btn"><i class="fas fa-search"></i> ค้นหา</button>
+                <input type="text" id="keyword" class="search-input" placeholder="ชื่อ, เบอร์โทรศัพท์, หรือเลขบัตรประชาชน..." autocomplete="off">
+                <button id="searchBtn" class="search-btn">
+                    <i class="fas fa-search"></i> ค้นหา
+                </button>
             </div>
-            <div class="status" id="statusBar">
-                <i class="fas fa-check-circle"></i> พร้อมใช้งาน
-            </div>
-            <div class="stats" id="statsArea">
-                <div class="stat-card">กำลังโหลดข้อมูล...</div>
+            <div class="status-bar" id="statusBar">
+                <i class="fas fa-check-circle" style="color: #28a745;"></i>
+                <span>พร้อมใช้งาน</span>
             </div>
         </div>
         
         <div class="results">
-            <h3><i class="fas fa-chart-line"></i> ผลการค้นหา</h3>
-            <div id="resultCount" style="margin: 10px 0; color: #666;">รอการค้นหา</div>
+            <div class="results-header">
+                <h3><i class="fas fa-chart-line"></i> ผลการค้นหา</h3>
+                <span class="result-count" id="resultCount">รอการค้นหา</span>
+            </div>
             <div id="resultsContainer">
-                <div style="text-align: center; padding: 50px; color: #999;">
-                    <i class="fas fa-info-circle fa-3x"></i>
+                <div class="empty-state">
+                    <i class="fas fa-info-circle"></i>
                     <p>กรุณากรอกข้อมูลที่ต้องการค้นหา</p>
                 </div>
             </div>
@@ -310,24 +656,39 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
     <script>
         let isSearching = false;
         
-        document.getElementById('searchBtn').onclick = performSearch;
-        document.getElementById('keyword').onkeypress = function(e) {
+        const searchBtn = document.getElementById('searchBtn');
+        const keywordInput = document.getElementById('keyword');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const resultCountSpan = document.getElementById('resultCount');
+        const statusBar = document.getElementById('statusBar');
+        
+        searchBtn.onclick = performSearch;
+        keywordInput.onkeypress = function(e) {
             if (e.key === 'Enter') performSearch();
         };
         
+        function updateStatus(msg, isError = false) {
+            statusBar.innerHTML = `
+                <i class="fas fa-${isError ? 'exclamation-circle' : 'check-circle'}" style="color: ${isError ? '#dc3545' : '#28a745'}"></i>
+                <span>${msg}</span>
+            `;
+        }
+        
         async function performSearch() {
             if (isSearching) return;
-            const keyword = document.getElementById('keyword').value.trim();
+            
+            const keyword = keywordInput.value.trim();
             if (!keyword) {
-                updateStatus('กรุณากรอกข้อมูล', 'warning');
+                updateStatus('กรุณากรอกข้อมูล', true);
                 return;
             }
+            
             isSearching = true;
-            const searchBtn = document.getElementById('searchBtn');
             searchBtn.disabled = true;
             searchBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> กำลังค้นหา...';
-            document.getElementById('resultsContainer').innerHTML = '<div class="loading"><div class="spinner"></div><p>กำลังค้นหาข้อมูล...</p></div>';
-            updateStatus('กำลังค้นหา: ' + keyword, 'info');
+            resultsContainer.innerHTML = '<div class="loading"><div class="spinner"></div><p>กำลังค้นหาข้อมูล...</p></div>';
+            resultCountSpan.textContent = 'กำลังค้นหา...';
+            updateStatus('กำลังค้นหา: ' + keyword);
             
             try {
                 const response = await fetch('/api/search', {
@@ -337,9 +698,11 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 });
                 const data = await response.json();
                 displayResults(data);
-                updateStatus('ค้นหาสำเร็จ', 'success');
+                updateStatus('ค้นหาสำเร็จ');
             } catch (error) {
-                updateStatus('เกิดข้อผิดพลาด', 'error');
+                console.error(error);
+                resultsContainer.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>เกิดข้อผิดพลาด กรุณาลองใหม่</p></div>';
+                updateStatus('เกิดข้อผิดพลาด', true);
             } finally {
                 isSearching = false;
                 searchBtn.disabled = false;
@@ -348,96 +711,209 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         }
         
         function displayResults(data) {
-            const container = document.getElementById('resultsContainer');
             let html = '';
             let total = 0;
             
+            // True CRM
+            if (data.data.true_portal) {
+                total++;
+                html += createTrueCard(data.data.true_portal);
+            }
+            
             // TPMAP
-            if (data.data.tpmap.people && data.data.tpmap.people.length) {
+            if (data.data.tpmap.people && data.data.tpmap.people.length > 0) {
                 total += data.data.tpmap.people.length;
                 html += createTPMAPCard(data.data.tpmap);
             }
             
             // Shipmile
-            if (data.data.shipmile.data && data.data.shipmile.data.length) {
+            if (data.data.shipmile.data && data.data.shipmile.data.length > 0) {
                 total += data.data.shipmile.count;
                 html += createShipmileCard(data.data.shipmile);
             }
             
             // Gambling
-            if (data.data.gambling.data && data.data.gambling.data.length) {
+            if (data.data.gambling.data && data.data.gambling.data.length > 0) {
                 total += data.data.gambling.count;
                 html += createGamblingCard(data.data.gambling);
             }
             
             if (total === 0) {
-                html = '<div style="text-align:center; padding:50px;">ไม่พบข้อมูล</div>';
+                html = '<div class="empty-state"><i class="fas fa-user-slash"></i><p>ไม่พบข้อมูล</p></div>';
+                resultCountSpan.textContent = 'ไม่พบข้อมูล';
+            } else {
+                resultCountSpan.textContent = `พบ ${total} รายการ`;
             }
             
-            container.innerHTML = html;
-            document.getElementById('resultCount').innerHTML = `พบ ${total} รายการ`;
+            resultsContainer.innerHTML = html;
+        }
+        
+        function createTrueCard(data) {
+            let html = `<div class="result-card">
+                <div class="result-header">
+                    <i class="fas fa-mobile-alt" style="color: #0066cc;"></i>
+                    <span>📱 True CRM</span>
+                </div>
+                <div class="result-body">`;
+            
+            if (Array.isArray(data)) {
+                data.forEach(item => {
+                    html += `<div class="info-row">
+                        <div class="info-label">ชื่อ-นามสกุล</div>
+                        <div class="info-value">${item['display-name-th'] || item['full-name'] || '-'}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">เบอร์โทรศัพท์</div>
+                        <div class="info-value">${item['msisdn'] || '-'}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">เลขบัตรประชาชน</div>
+                        <div class="info-value">${item['citizen-id'] || '-'}</div>
+                    </div>`;
+                });
+            } else {
+                html += `<div class="info-row">
+                    <div class="info-label">ข้อมูล</div>
+                    <div class="json-preview">${JSON.stringify(data, null, 2)}</div>
+                </div>`;
+            }
+            
+            html += `</div></div>`;
+            return html;
         }
         
         function createTPMAPCard(data) {
-            let html = `<div class="result-card"><div class="result-header">🏛️ TPMAP (${data.people.length} คน)</div><div class="result-body">`;
-            data.people.forEach(p => {
-                html += `<div style="margin-bottom: 20px; padding: 10px; border-bottom: 1px solid #eee;">
-                            <strong>ชื่อ:</strong> ${p.name || '-'}<br>
-                            <strong>เลขบัตร:</strong> ${p.NID || '-'}<br>
-                            <strong>ที่อยู่:</strong> ${p.formatted_address || '-'}<br>
-                            <strong>สถานะ:</strong> ${p.status || '-'}
-                         </div>`;
+            let html = `<div class="result-card">
+                <div class="result-header">
+                    <i class="fas fa-landmark" style="color: #28a745;"></i>
+                    <span>🏛️ TPMAP (${data.people.length} คน)</span>
+                </div>
+                <div class="result-body">`;
+            
+            data.people.forEach((person, idx) => {
+                html += `<div class="person-card">
+                    <div class="info-row">
+                        <div class="info-label">ชื่อ-นามสกุล</div>
+                        <div class="info-value"><strong>${person.name || '-'}</strong></div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">เลขบัตรประชาชน</div>
+                        <div class="info-value">${person.NID || '-'}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">ที่อยู่</div>
+                        <div class="info-value">${person.formatted_address || '-'}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">สถานะ</div>
+                        <div class="info-value"><span class="badge">${person.status || '-'}</span></div>
+                    </div>`;
+                
+                if (person.house_data_ID) {
+                    html += `<div class="info-row">
+                        <div class="info-label">รหัสบ้าน</div>
+                        <div class="info-value">${person.house_data_ID}</div>
+                    </div>`;
+                }
+                html += `</div>`;
             });
-            if (data.welfare && data.welfare.length) {
-                html += `<div style="margin-top: 20px;"><strong>ข้อมูลสวัสดิการ:</strong><pre style="background:#f0f0f0;padding:10px;margin-top:5px;">${JSON.stringify(data.welfare, null, 2)}</pre></div>`;
+            
+            if (data.welfare && data.welfare.length > 0) {
+                html += `<div class="welfare-section">
+                    <div class="welfare-title"><i class="fas fa-hand-holding-heart"></i> ข้อมูลสวัสดิการ (${data.welfare.length} รายการ)</div>
+                    <div class="json-preview">${JSON.stringify(data.welfare, null, 2)}</div>
+                </div>`;
             }
+            
             html += `</div></div>`;
             return html;
         }
         
         function createShipmileCard(data) {
-            let html = `<div class="result-card"><div class="result-header">🚚 Shipmile (${data.count} รายการ)</div><div class="result-body"><table class="member-table"><thead><tr><th>ชื่อ</th><th>เบอร์โทร</th><th>ที่อยู่</th></tr></thead><tbody>`;
+            let html = `<div class="result-card">
+                <div class="result-header">
+                    <i class="fas fa-truck" style="color: #ff9800;"></i>
+                    <span>🚚 Shipmile (${data.count} รายการ)</span>
+                </div>
+                <div class="result-body">
+                    <div class="data-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ชื่อ</th>
+                                    <th>เบอร์โทร</th>
+                                    <th>ที่อยู่</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+            
             data.data.forEach(item => {
-                html += `<tr><td>${item.name || '-'}</td><td>${item.phone || '-'}</td><td>${item.address || '-'}</td></tr>`;
+                html += `<tr>
+                    <td>${escapeHtml(item.name || '-')}</td>
+                    <td>${item.phone || '-'}</td>
+                    <td>${escapeHtml(item.address || '-')}</td>
+                </tr>`;
             });
-            html += `</tbody></table></div></div>`;
+            
+            html += `</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>`;
             return html;
         }
         
         function createGamblingCard(data) {
-            let html = `<div class="result-card"><div class="result-header">🎰 เว็บพนัน (${data.count} รายการ)</div><div class="result-body"><table class="member-table"><thead><tr><th>รหัสสมาชิก</th><th>ชื่อ-นามสกุล</th><th>เบอร์โทร</th><th>ธนาคาร</th><th>เลขบัญชี</th></tr></thead><tbody>`;
-            data.data.slice(0, 20).forEach(item => {
+            let html = `<div class="result-card">
+                <div class="result-header">
+                    <i class="fas fa-dice" style="color: #9c27b0;"></i>
+                    <span>🎰 เว็บพนัน (${data.count} รายการ)</span>
+                </div>
+                <div class="result-body">
+                    <div class="data-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>รหัส</th>
+                                    <th>ชื่อ-สกุล</th>
+                                    <th>เบอร์โทร</th>
+                                    <th>ธนาคาร</th>
+                                    <th>เลขบัญชี</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+            
+            data.data.slice(0, 30).forEach(item => {
                 html += `<tr>
-                            <td>${item['รหัสสมาชิก'] || '-'}</td>
-                            <td>${item['ชื่อ-นามสกุล'] || '-'}</td>
-                            <td>${item['เบอร์โทรศัพท์'] || '-'}</td>
-                            <td>${item['ธนาคาร'] || '-'}</td>
-                            <td>${item['เลขบัญชี'] || '-'}</td>
-                         </tr>`;
+                    <td>${item['รหัสสมาชิก'] || '-'}</td>
+                    <td>${item['ชื่อ-นามสกุล'] || '-'}</td>
+                    <td>${item['เบอร์โทรศัพท์'] || item['เบอร์โทรศัพท์_10หลัก'] || '-'}</td>
+                    <td>${item['ธนาคาร'] || '-'}</td>
+                    <td>${item['เลขบัญชี'] || '-'}</td>
+                </tr>`;
             });
-            html += `</tbody></table></div></div>`;
+            
+            if (data.count > 30) {
+                html += `<tr><td colspan="5" style="text-align:center; color:#999;">แสดง 30 จาก ${data.count} รายการ</td></tr>`;
+            }
+            
+            html += `</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>`;
             return html;
         }
         
-        async function loadStats() {
-            try {
-                const res = await fetch('/api/status');
-                const status = await res.json();
-                document.getElementById('statsArea').innerHTML = `
-                    <div class="stat-card">🎰 เว็บพนัน: ${status.gambling.records.toLocaleString()} รายการ</div>
-                    <div class="stat-card">🚚 Shipmile: ${status.shipmile.records.toLocaleString()} รายการ</div>
-                    <div class="stat-card">🏛️ TPMAP: พร้อมใช้งาน</div>
-                `;
-            } catch(e) {}
+        function escapeHtml(str) {
+            if (!str) return '-';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
         }
-        
-        function updateStatus(msg, type) {
-            const bar = document.getElementById('statusBar');
-            bar.innerHTML = `<i class="fas fa-${type === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${msg}`;
-        }
-        
-        loadStats();
-        setInterval(loadStats, 60000);
     </script>
 </body>
 </html>
