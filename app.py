@@ -10,8 +10,8 @@ app = Flask(__name__)
 
 # ==================== CONFIG ====================
 # ใช้ GitHub Releases URLs (ไฟล์ใหญ่)
-GAMBLING_DATA_URL = "https://github.com/Atom88888881/search/releases/download/v1.0/gambling_data.json"
-SHIPMILE_DATA_URL = "https://github.com/Atom88888881/search/releases/download/v1.0/shipmile_address.json"
+GAMBLING_DATA_URL = "https://github.com/Atom88888881/search/releases/download/w/gambling_data.json"
+SHIPMILE_DATA_URL = "https://github.com/Atom88888881/search/releases/download/w/shipsmile_address.json"
 
 # True Portal Cookies
 TRUE_COOKIES = {
