@@ -1,11 +1,11 @@
-# app.py - แก้ไขเฉพาะส่วน TPMAP Service
+# app.py - แก้ไขส่วน TPMAP Service
 from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
 import os
 import re
-import pickle
 import base64
+import pickle
 from datetime import datetime
 
 app = Flask(__name__)
@@ -28,47 +28,12 @@ TRUE_COOKIES = {
 TRUE_USER = "17554398"
 TRUE_API = "https://sff-dealer.truecorp.co.th/profiles/customer/get"
 
-# TPMAP Cookies - ใช้ pickle data ที่คุณให้มา
-# ข้อมูล pickle: b'\x80\x04\x95\xf4\x00\x00\x00\x00\x00\x00\x00]\x94(\x8c\x06domain\x94\x8c\x13logbook.tpmap.in.th\x94\x8c\x06expiry\x94J}\xc4i\x8c\x08httpOnly\x94\x89\x8c\x04name\x94\x8c\x0e_pk_ses.2.6367\x94\x8c\x04path\x94\x8c\x01/\x94\x8c\x08sameSite\x94\x8c\x03Lax\x94\x8c\x06secure\x94\x89\x8c\x05value\x94\x8c\x011\x94u\x8c\x06domain\x94h\x02\x8c\x06expiry\x94J\xf56\xcak\x8c\x08httpOnly\x94\x89\x8c\x04name\x94\x8c\n_pk_id.2.6367\x94\x8c\x04path\x94h\r\x8c\x08sameSite\x94h\x10\x8c\x06secure\x94\x89\x8c\x05value\x94\x8c\x1c13b47b74aa573555.1774459253.\x94ue.'
-
-# แปลง pickle data เป็น cookies dictionary โดยตรง
-def parse_tpmap_cookies_from_pickle(pickle_data):
-    """แปลง pickle data เป็น cookies dictionary"""
-    try:
-        # ถ้าเป็น base64 ให้ decode ก่อน
-        if isinstance(pickle_data, str):
-            pickle_bytes = base64.b64decode(pickle_data)
-        else:
-            pickle_bytes = pickle_data
-            
-        cookies_list = pickle.loads(pickle_bytes)
-        cookies_dict = {}
-        for cookie in cookies_list:
-            if isinstance(cookie, dict):
-                name = cookie.get('name')
-                value = cookie.get('value')
-                if name and value:
-                    cookies_dict[name] = value
-        return cookies_dict
-    except Exception as e:
-        print(f"Error parsing pickle: {e}")
-        return {}
-
-# ใช้ cookies จาก pickle
-TPMAP_PICKLE_B64 = "gASV9AAAAAAAAABdlCh9lCiMBmRvbWFpbpSME2xvZ2Jvb2sudHBtYXAuaW4udGiUjAZleHBpcnmUStYUxGmMCGh0dHBPbmx5lImMBG5hbWWUjA5fcGtfc2VzLjIuNjM2N5SMBHBhdGiUjAEvlIwIc2FtZVNpdGWUjANMYXiUjAZzZWN1cmWUiYwFdmFsdWWUjAExlHV9lChoAowTbG9nYm9vay50cG1hcC5pbi50aJRoBEpOK8praAWJaAaMDV9wa19pZC4yLjYzNjeUaAhoCWgKjANMYXiUaAyJaA2MHDQxYzYyYzhkOGJiZGQxZDYuMTc3NDQ1NjI3MC6UdWUu"
-
-# แปลงเป็น cookies dictionary
-TPMAP_COOKIES = parse_tpmap_cookies_from_pickle(TPMAP_PICKLE_B64)
-
-# ถ้าแปลงไม่สำเร็จ ให้ใช้ค่า default
-if not TPMAP_COOKIES:
-    print("⚠️ Using default TPMAP cookies")
-    TPMAP_COOKIES = {
-        "_pk_ses.2.6367": "1",
-        "_pk_id.2.6367": "13b47b74aa573555.1774459253."
-    }
-
-print(f"✅ TPMAP Cookies loaded: {list(TPMAP_COOKIES.keys())}")
+# TPMAP Cookies - ใช้จาก pickle data ที่คุณให้มา
+# สร้าง cookies dictionary โดยตรง
+TPMAP_COOKIES = {
+    "_pk_ses.2.6367": "1",
+    "_pk_id.2.6367": "13b47b74aa573555.1774459253."
+}
 
 # ==================== DATA MANAGERS (โหลดจาก URL) ====================
 class GamblingDataManager:
@@ -182,11 +147,11 @@ class TruePortalService:
             print(f"True API error: {e}")
             return None
 
-# ==================== TPMAP SERVICE (ใช้ cookies ที่แปลงจาก pickle) ====================
+# ==================== TPMAP SERVICE (ใช้ cookies ที่ถูกต้อง) ====================
 class TPMAPService:
     def __init__(self):
         self.cookies = TPMAP_COOKIES
-        print(f"✅ TPMAP initialized with cookies: {list(self.cookies.keys())}")
+        print(f"✅ TPMAP cookies loaded: {list(self.cookies.keys())}")
     
     def build_full_address(self, data):
         parts = []
@@ -253,15 +218,12 @@ class TPMAPService:
         }
         
         try:
-            # ทดสอบ connection ก่อน
-            print(f"🔍 Searching TPMAP for: {keyword}")
-            
             # ค้นหาข้อมูลบุคคล
             people_res = session.post(
                 "https://api2.logbook.emenscr.in.th/people/find",
                 data=payload,
                 headers=headers,
-                timeout=15
+                timeout=10
             )
             people = []
             if people_res.status_code == 200:
@@ -270,14 +232,13 @@ class TPMAPService:
                 print(f"✅ TPMAP people found: {len(people)}")
             else:
                 print(f"⚠️ TPMAP people API returned: {people_res.status_code}")
-                print(f"Response: {people_res.text[:200]}")
             
             # ค้นหาข้อมูลสวัสดิการ
             welfare_res = session.post(
                 "https://api2.logbook.emenscr.in.th/mofwelfare/find",
                 data=payload,
                 headers=headers,
-                timeout=15
+                timeout=10
             )
             welfare = []
             if welfare_res.status_code == 200:
@@ -292,9 +253,6 @@ class TPMAPService:
                 person['formatted_address'] = self.build_full_address(person)
             
             return people, welfare
-        except requests.exceptions.Timeout:
-            print(f"❌ TPMAP API timeout")
-            return None, None
         except Exception as e:
             print(f"❌ TPMAP API error: {e}")
             return None, None
@@ -313,8 +271,7 @@ print(f"\n📊 System Status:")
 print(f"   🎰 Gambling: {len(gambling_manager.data):,} records")
 print(f"   🚚 Shipmile: {len(shipmile_manager.data):,} records")
 print(f"   📱 True Portal: {'✅ Cookies loaded' if true_service.cookies else '❌'}")
-print(f"   🏛️ TPMAP: {'✅ Cookies loaded' if tpmap_service.cookies else '❌'}")
-print(f"   🏛️ TPMAP Cookies: {list(tpmap_service.cookies.keys())}")
+print(f"   🏛️ TPMAP: {'✅ Cookies loaded' if tpmap_service.cookies else '❌'} - Cookies: {list(tpmap_service.cookies.keys())}")
 print("=" * 60)
 
 # ==================== FLASK ROUTES ====================
@@ -387,7 +344,7 @@ def api_status():
     }
     return jsonify(status)
 
-# HTML Template (เหมือนเดิม)
+# HTML Template (คงเดิม)
 HTML_TEMPLATE = '''<!DOCTYPE html>
 <html lang="th">
 <head>
@@ -447,4 +404,135 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             </div>
             <div class="stats" id="statsArea">
                 <div class="stat-card">กำลังโหลดข้อมูล...</div>
-            </div
+            </div>
+        </div>
+        
+        <div class="results">
+            <h3><i class="fas fa-chart-line"></i> ผลการค้นหา</h3>
+            <div id="resultCount" style="margin: 10px 0; color: #666;">รอการค้นหา</div>
+            <div id="resultsContainer">
+                <div style="text-align: center; padding: 50px; color: #999;">
+                    <i class="fas fa-info-circle fa-3x"></i>
+                    <p>กรุณากรอกข้อมูลที่ต้องการค้นหา</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let isSearching = false;
+        
+        document.getElementById('searchBtn').onclick = performSearch;
+        document.getElementById('keyword').onkeypress = function(e) {
+            if (e.key === 'Enter') performSearch();
+        };
+        
+        async function performSearch() {
+            if (isSearching) return;
+            const keyword = document.getElementById('keyword').value.trim();
+            if (!keyword) {
+                updateStatus('กรุณากรอกข้อมูล', 'warning');
+                return;
+            }
+            const system = document.querySelector('input[name="system"]:checked').value;
+            isSearching = true;
+            const searchBtn = document.getElementById('searchBtn');
+            searchBtn.disabled = true;
+            searchBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> กำลังค้นหา...';
+            document.getElementById('resultsContainer').innerHTML = '<div class="loading"><div class="spinner"></div><p>กำลังค้นหาข้อมูล...</p></div>';
+            updateStatus('กำลังค้นหา: ' + keyword, 'info');
+            
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({keyword, system})
+                });
+                const data = await response.json();
+                displayResults(data);
+                updateStatus('ค้นหาสำเร็จ', 'success');
+            } catch (error) {
+                updateStatus('เกิดข้อผิดพลาด', 'error');
+            } finally {
+                isSearching = false;
+                searchBtn.disabled = false;
+                searchBtn.innerHTML = '<i class="fas fa-search"></i> ค้นหา';
+            }
+        }
+        
+        function displayResults(data) {
+            const container = document.getElementById('resultsContainer');
+            let html = ''; let total = 0;
+            
+            if (data.data) {
+                if (data.data.gambling?.data?.length) {
+                    total += data.data.gambling.count;
+                    html += createGamblingCard(data.data.gambling);
+                }
+                if (data.data.true_portal?.data) {
+                    total += 1;
+                    html += createResultCard('True CRM', data.data.true_portal.data);
+                }
+                if (data.data.tpmap?.people?.length) {
+                    total += data.data.tpmap.people.length;
+                    html += createResultCard('TPMAP', data.data.tpmap);
+                }
+                if (data.data.shipmile?.data?.length) {
+                    total += data.data.shipmile.count;
+                    html += createResultCard('Shipmile', data.data.shipmile);
+                }
+                if (total === 0) html = '<div style="text-align:center; padding:50px;">ไม่พบข้อมูล</div>';
+            }
+            container.innerHTML = html;
+            document.getElementById('resultCount').innerHTML = `พบ ${total} รายการ`;
+        }
+        
+        function createGamblingCard(data) {
+            let html = `<div class="result-card"><div class="result-header">🎰 เว็บพนัน (${data.count} รายการ)</div><div class="result-body"><table class="member-table"><thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>เบอร์โทร</th><th>ธนาคาร</th><th>เลขบัญชี</th> </thead><tbody>`;
+            data.data.slice(0, 20).forEach(item => {
+                html += ` hut_html
+                    <td>${item['รหัสสมาชิก'] || '-'}</td>
+                    <td>${item['ชื่อ-นามสกุล'] || '-'}</td>
+                    <td>${item['เบอร์โทรศัพท์'] || '-'}</td>
+                    <td>${item['ธนาคาร'] || '-'}</td>
+                    <td>${item['เลขบัญชี'] || '-'}</td>
+                 </tr>`;
+            });
+            html += `</tbody> </div></div>`;
+            return html;
+        }
+        
+        function createResultCard(title, data) {
+            return `<div class="result-card"><div class="result-header">${title}</div><div class="result-body"><div class="json-viewer"><pre>${JSON.stringify(data, null, 2)}</pre></div></div></div>`;
+        }
+        
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/status');
+                const status = await res.json();
+                document.getElementById('statsArea').innerHTML = `
+                    <div class="stat-card">🎰 เว็บพนัน: ${status.gambling.records.toLocaleString()} รายการ</div>
+                    <div class="stat-card">🚚 Shipmile: ${status.shipmile.records.toLocaleString()} รายการ</div>
+                    <div class="stat-card">📱 True CRM: ${status.true_portal.authenticated ? '✅ พร้อม' : '⚠️ ไม่พร้อม'}</div>
+                    <div class="stat-card">🏛️ TPMAP: ${status.tpmap.authenticated ? '✅ พร้อม' : '⚠️ ไม่พร้อม'}</div>
+                `;
+            } catch(e) {}
+        }
+        
+        function updateStatus(msg, type) {
+            const bar = document.getElementById('statusBar');
+            const icon = type === 'error' ? 'exclamation-circle' : 'info-circle';
+            bar.innerHTML = `<i class="fas fa-${icon}"></i> ${msg}`;
+        }
+        
+        loadStats();
+        setInterval(loadStats, 60000);
+    </script>
+</body>
+</html>
+'''
+
+app.debug = False
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
