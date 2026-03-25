@@ -1,4 +1,4 @@
-# app.py - EasySearch ครบ 4 ระบบ + Popup ติดตาม IG
+# app.py - เพิ่มระบบวนลูปค้นหาจาก TPMAP
 from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
@@ -247,30 +247,122 @@ def api_search():
         'data': {}
     }
     
-    # True CRM
+    # ค้นหาทั้งหมดด้วยคีย์เวิร์ดแรก
     true_data = true_service.search(keyword)
-    results['data']['true_portal'] = true_data if true_data else None
-    
-    # TPMAP
     people, welfare = tpmap_service.search(keyword)
+    ship_data = shipmile_manager.search(keyword)
+    gambling_data = gambling_manager.search(keyword)
+    
+    # เก็บผลลัพธ์
+    results['data']['true_portal'] = true_data if true_data else None
     results['data']['tpmap'] = {
         'people': people if people else [],
         'welfare': welfare if welfare else []
     }
-    
-    # Shipmile
-    ship_data = shipmile_manager.search(keyword)
     results['data']['shipmile'] = {
         'count': len(ship_data),
         'data': ship_data[:10]
     }
-    
-    # Gambling
-    gambling_data = gambling_manager.search(keyword)
     results['data']['gambling'] = {
         'count': len(gambling_data),
         'data': gambling_data[:50]
     }
+    
+    # ========== วนลูปค้นหาเพิ่มจากข้อมูลที่ได้ ==========
+    # รวบรวมเบอร์และเลขบัตรที่ได้จาก TPMAP
+    extra_keywords = set()
+    
+    # ดึงเลขบัตรประชาชนจาก TPMAP
+    if people:
+        for person in people:
+            nid = person.get('NID', '')
+            if nid and len(str(nid)) == 13:
+                extra_keywords.add(str(nid))
+    
+    # ดึงเบอร์โทรจาก True CRM (ถ้ามี)
+    if true_data:
+        if isinstance(true_data, list):
+            for item in true_data:
+                phone = item.get('msisdn', '')
+                if phone:
+                    extra_keywords.add(str(phone))
+                nid = item.get('citizen-id', '')
+                if nid:
+                    extra_keywords.add(str(nid))
+        elif isinstance(true_data, dict):
+            phone = true_data.get('msisdn', '')
+            if phone:
+                extra_keywords.add(str(phone))
+            nid = true_data.get('citizen-id', '')
+            if nid:
+                extra_keywords.add(str(nid))
+    
+    # ดึงเบอร์โทรจาก Shipmile (ถ้ามี)
+    if ship_data:
+        for item in ship_data:
+            phone = item.get('phone', '')
+            if phone:
+                extra_keywords.add(str(phone))
+    
+    # ดึงเบอร์โทรจาก Gambling (ถ้ามี)
+    if gambling_data:
+        for item in gambling_data:
+            phone = item.get('เบอร์โทรศัพท์', '') or item.get('เบอร์โทรศัพท์_10หลัก', '')
+            if phone:
+                extra_keywords.add(str(phone))
+    
+    # วนลูปค้นหาด้วยคีย์เวิร์ดเพิ่มเติม
+    extra_true = []
+    extra_ship = []
+    extra_gambling = []
+    
+    for ek in extra_keywords:
+        if ek and ek != keyword:  # ไม่ให้ค้นซ้ำกับคีย์เวิร์ดแรก
+            # True
+            true_extra = true_service.search(ek)
+            if true_extra and true_extra not in extra_true:
+                extra_true.append(true_extra)
+            
+            # Shipmile
+            ship_extra = shipmile_manager.search(ek)
+            if ship_extra:
+                for item in ship_extra:
+                    if item not in extra_ship:
+                        extra_ship.append(item)
+            
+            # Gambling
+            gambling_extra = gambling_manager.search(ek)
+            if gambling_extra:
+                for item in gambling_extra:
+                    if item not in extra_gambling:
+                        extra_gambling.append(item)
+    
+    # รวมผลลัพธ์เพิ่มเติม
+    if extra_true:
+        if results['data']['true_portal']:
+            if isinstance(results['data']['true_portal'], list):
+                results['data']['true_portal'].extend(extra_true)
+            else:
+                results['data']['true_portal'] = [results['data']['true_portal']] + extra_true
+        else:
+            results['data']['true_portal'] = extra_true
+    
+    if extra_ship:
+        existing_ids = {item.get('phone', '') + item.get('name', '') for item in results['data']['shipmile']['data']}
+        for item in extra_ship:
+            item_id = item.get('phone', '') + item.get('name', '')
+            if item_id not in existing_ids:
+                results['data']['shipmile']['data'].append(item)
+        results['data']['shipmile']['count'] = len(results['data']['shipmile']['data'])
+        results['data']['shipmile']['data'] = results['data']['shipmile']['data'][:10]
+    
+    if extra_gambling:
+        existing_ids = {item.get('รหัสสมาชิก', '') for item in results['data']['gambling']['data']}
+        for item in extra_gambling:
+            if item.get('รหัสสมาชิก', '') not in existing_ids:
+                results['data']['gambling']['data'].append(item)
+        results['data']['gambling']['count'] = len(results['data']['gambling']['data'])
+        results['data']['gambling']['data'] = results['data']['gambling']['data'][:50]
     
     return jsonify(results)
 
@@ -303,7 +395,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             margin: 0 auto;
         }
         
-        /* Header */
         .header {
             text-align: center;
             color: white;
@@ -330,7 +421,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             color: #aaa;
         }
         
-        /* Search Box */
         .search-box {
             background: #1a1a1a;
             border-radius: 24px;
@@ -389,7 +479,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             transform: none;
         }
         
-        /* Results */
         .results {
             background: #1a1a1a;
             border-radius: 24px;
@@ -423,7 +512,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             border-radius: 20px;
         }
         
-        /* Result Cards */
         .result-card {
             border: 1px solid #2a2a2a;
             border-radius: 16px;
@@ -452,7 +540,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             padding: 16px;
         }
         
-        /* Info Row */
         .info-row {
             margin-bottom: 12px;
             padding-bottom: 8px;
@@ -472,7 +559,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             word-break: break-word;
         }
         
-        /* Table for Gambling/Shipmile */
         .data-table {
             width: 100%;
             overflow-x: auto;
@@ -500,7 +586,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             color: #ddd;
         }
         
-        /* Person Card for TPMAP */
         .person-card {
             background: #0a0a0a;
             border-radius: 12px;
@@ -513,7 +598,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             margin-bottom: 0;
         }
         
-        /* Loading */
         .loading {
             text-align: center;
             padding: 50px 20px;
@@ -534,7 +618,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             100% { transform: rotate(360deg); }
         }
         
-        /* Empty State */
         .empty-state {
             text-align: center;
             padding: 50px 20px;
@@ -547,7 +630,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             opacity: 0.5;
         }
         
-        /* Status Bar */
         .status-bar {
             background: #0a0a0a;
             padding: 10px 16px;
@@ -560,7 +642,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             gap: 8px;
         }
         
-        /* Mobile Optimizations */
         @media (max-width: 600px) {
             body {
                 padding: 12px;
@@ -590,7 +671,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             }
         }
         
-        /* Badge */
         .badge {
             display: inline-block;
             background: rgba(102, 126, 234, 0.2);
@@ -601,7 +681,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             font-weight: 500;
         }
         
-        /* Welfare Section */
         .welfare-section {
             margin-top: 16px;
             padding-top: 12px;
@@ -628,7 +707,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             border: 1px solid #2a2a2a;
         }
         
-        /* Popup Modal */
         .popup-overlay {
             position: fixed;
             top: 0;
@@ -703,16 +781,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             font-size: 20px;
         }
         
-        .skip-btn {
-            background: transparent;
-            border: none;
-            color: #666;
-            font-size: 13px;
-            cursor: pointer;
-            font-family: 'Kanit', sans-serif;
-            padding: 8px;
-        }
-        
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
@@ -776,7 +844,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         const resultCountSpan = document.getElementById('resultCount');
         const statusBar = document.getElementById('statusBar');
         
-        // Popup Instagram
         function showPopup() {
             const popup = document.createElement('div');
             popup.className = 'popup-overlay';
@@ -787,7 +854,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                         <i class="fab fa-instagram"></i>
                     </div>
                     <h2>ติดตามก่อนใช้งาน</h2>
-                    <p>กรุณากดติดตามด้วยไอสัส</p>
+                    <p>กรุณากดติดตามเพื่อสนับสนุนเรา</p>
                     <a href="https://www.instagram.com/eedok.4/" target="_blank" class="follow-btn" id="followBtn">
                         <i class="fab fa-instagram"></i>
                         ติดตามบน Instagram
@@ -798,7 +865,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             document.body.appendChild(popup);
             
             const followBtn = document.getElementById('followBtn');
-            const skipBtn = document.getElementById('skipBtn');
             
             followBtn.addEventListener('click', function() {
                 localStorage.setItem('ig_followed', 'true');
@@ -806,13 +872,8 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                     popup.remove();
                 }, 500);
             });
-            
-            skipBtn.addEventListener('click', function() {
-                popup.remove();
-            });
         }
         
-        // ตรวจสอบว่ากดติดตามแล้วหรือยัง
         if (!localStorage.getItem('ig_followed')) {
             showPopup();
         }
@@ -871,8 +932,13 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             
             // True CRM
             if (data.data.true_portal) {
-                total++;
-                html += createTrueCard(data.data.true_portal);
+                let trueData = data.data.true_portal;
+                if (Array.isArray(trueData)) {
+                    total += trueData.length;
+                } else {
+                    total++;
+                }
+                html += createTrueCard(trueData);
             }
             
             // TPMAP
@@ -911,27 +977,21 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 </div>
                 <div class="result-body">`;
             
-            if (Array.isArray(data)) {
-                data.forEach(item => {
-                    html += `<div class="info-row">
-                        <div class="info-label">ชื่อ-นามสกุล</div>
-                        <div class="info-value">${item['display-name-th'] || item['full-name'] || '-'}</div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-label">เบอร์โทรศัพท์</div>
-                        <div class="info-value">${item['msisdn'] || '-'}</div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-label">เลขบัตรประชาชน</div>
-                        <div class="info-value">${item['citizen-id'] || '-'}</div>
-                    </div>`;
-                });
-            } else {
+            const items = Array.isArray(data) ? data : [data];
+            items.forEach(item => {
                 html += `<div class="info-row">
-                    <div class="info-label">ข้อมูล</div>
-                    <div class="json-preview">${JSON.stringify(data, null, 2)}</div>
+                    <div class="info-label">ชื่อ-นามสกุล</div>
+                    <div class="info-value">${item['display-name-th'] || item['full-name'] || '-'}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">เบอร์โทรศัพท์</div>
+                    <div class="info-value">${item['msisdn'] || '-'}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">เลขบัตรประชาชน</div>
+                    <div class="info-value">${item['citizen-id'] || '-'}</div>
                 </div>`;
-            }
+            });
             
             html += `</div></div>`;
             return html;
@@ -992,13 +1052,13 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 </div>
                 <div class="result-body">
                     <div class="data-table">
-                        <table>
+                         <table>
                             <thead>
-                                <tr>
+                                 <tr>
                                     <th>ชื่อ</th>
                                     <th>เบอร์โทร</th>
                                     <th>ที่อยู่</th>
-                                </tr>
+                                 </tr>
                             </thead>
                             <tbody>`;
             
@@ -1011,7 +1071,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             });
             
             html += `</tbody>
-                        </table>
+                         </table>
                     </div>
                 </div>
             </div>`;
@@ -1026,15 +1086,15 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 </div>
                 <div class="result-body">
                     <div class="data-table">
-                        <table>
+                         <table>
                             <thead>
-                                <tr>
+                                 <tr>
                                     <th>รหัส</th>
                                     <th>ชื่อ-สกุล</th>
                                     <th>เบอร์โทร</th>
                                     <th>ธนาคาร</th>
                                     <th>เลขบัญชี</th>
-                                </tr>
+                                 </tr>
                             </thead>
                             <tbody>`;
             
@@ -1053,7 +1113,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             }
             
             html += `</tbody>
-                        </table>
+                         </table>
                     </div>
                 </div>
             </div>`;
