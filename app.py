@@ -280,7 +280,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>EasySearch - ระบบค้นหาข้อมูล</title>
+    <title>ระบบค้นหาข้อมูลส่วนบุคคล</title>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -737,7 +737,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 <i class="fas fa-search"></i>
                 AtomSearch
             </h1>
-            <p>ค้นหาข้อมูลครบจบในที่เดียว | True | TPMAP | Shipmile | เว็บพนัน</p>
+            <p>ค้นหาข้อมูลส่วนบุคคล ใช้งานฟรี</p>
         </div>
         
         <div class="search-box">
@@ -787,13 +787,12 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                         <i class="fab fa-instagram"></i>
                     </div>
                     <h2>ติดตามก่อนใช้งาน</h2>
-                    <p>กรุณากดติดตามเพื่อสนับสนุนเรา<br>และได้รับอัปเดตฟีเจอร์ใหม่ๆ</p>
+                    <p>กรุณากดติดตามด้วยไอสัส</p>
                     <a href="https://www.instagram.com/eedok.4/" target="_blank" class="follow-btn" id="followBtn">
                         <i class="fab fa-instagram"></i>
                         ติดตามบน Instagram
                     </a>
                     <br>
-                    <button class="skip-btn" id="skipBtn">ใช้ต่อโดยไม่ติดตาม</button>
                 </div>
             `;
             document.body.appendChild(popup);
