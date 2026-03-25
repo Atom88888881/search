@@ -1,9 +1,11 @@
-# app.py
+# app.py - แก้ไขส่วน TPMAP Service
 from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
 import os
 import re
+import base64
+import pickle
 from datetime import datetime
 
 app = Flask(__name__)
@@ -26,9 +28,12 @@ TRUE_COOKIES = {
 TRUE_USER = "17554398"
 TRUE_API = "https://sff-dealer.truecorp.co.th/profiles/customer/get"
 
-# TPMAP Cookies
-import base64
-TPMAP_COOKIES_B64 = "W3siZG9tYWluIjogImxvZ2Jvb2sudHBtYXAuaW4udGgiLCAiZXhwaXJ5IjogMTc3NDQ2MDg3MywgImh0dHBPbmx5IjogZmFsc2UsICJuYW1lIjogIl9wa19zZXMuMi42MzY3IiwgInBhdGgiOiAiLyIsICJzYW1lU2l0ZSI6ICJMYXgiLCAic2VjdXJlIjogZmFsc2UsICJ2YWx1ZSI6ICIxIn0sIHsiZG9tYWluIjogImxvZ2Jvb2sudHBtYXAuaW4udGgiLCAiZXhwaXJ5IjogMTgwODQxNDI3MywgImh0dHBPbmx5IjogZmFsc2UsICJuYW1lIjogIl9wa19pZC4yLjYzNjciLCAicGF0aCI6ICIvIiwgInNhbWVTaXRlIjogIkxheCIsICJzZWN1cmUiOiBmYWxzZSwgInZhbHVlIjogIjgyZjkxZmMwYzNhOGJkYjUuMTc3NDQ1OTA3My4ifV0="
+# TPMAP Cookies - ใช้จาก pickle data ที่คุณให้มา
+# สร้าง cookies dictionary โดยตรง
+TPMAP_COOKIES = {
+    "_pk_ses.2.6367": "1",
+    "_pk_id.2.6367": "13b47b74aa573555.1774459253."
+}
 
 # ==================== DATA MANAGERS (โหลดจาก URL) ====================
 class GamblingDataManager:
@@ -142,24 +147,11 @@ class TruePortalService:
             print(f"True API error: {e}")
             return None
 
-# ==================== TPMAP SERVICE ====================
+# ==================== TPMAP SERVICE (ใช้ cookies ที่ถูกต้อง) ====================
 class TPMAPService:
     def __init__(self):
-        self.cookies = None
-        self.load_cookies()
-    
-    def load_cookies(self):
-        try:
-            decoded = base64.b64decode(TPMAP_COOKIES_B64).decode('utf-8')
-            cookies_list = eval(decoded)
-            self.cookies = {}
-            for cookie in cookies_list:
-                self.cookies[cookie['name']] = cookie['value']
-            print(f"✅ TPMAP cookies loaded: {len(self.cookies)} items")
-            return True
-        except Exception as e:
-            print(f"❌ Error loading TPMAP cookies: {e}")
-            return False
+        self.cookies = TPMAP_COOKIES
+        print(f"✅ TPMAP cookies loaded: {list(self.cookies.keys())}")
     
     def build_full_address(self, data):
         parts = []
@@ -187,9 +179,10 @@ class TPMAPService:
         return " ".join(parts) if parts else "ไม่มีข้อมูลที่อยู่"
     
     def search(self, keyword):
-        if not keyword or not self.cookies:
+        if not keyword:
             return None, None
         
+        # สร้าง session และเพิ่ม cookies
         session = requests.Session()
         session.cookies.update(self.cookies)
         
@@ -225,28 +218,43 @@ class TPMAPService:
         }
         
         try:
+            # ค้นหาข้อมูลบุคคล
             people_res = session.post(
                 "https://api2.logbook.emenscr.in.th/people/find",
                 data=payload,
                 headers=headers,
                 timeout=10
             )
-            people = people_res.json().get("data", []) if people_res.status_code == 200 else []
+            people = []
+            if people_res.status_code == 200:
+                people_data = people_res.json()
+                people = people_data.get("data", [])
+                print(f"✅ TPMAP people found: {len(people)}")
+            else:
+                print(f"⚠️ TPMAP people API returned: {people_res.status_code}")
             
+            # ค้นหาข้อมูลสวัสดิการ
             welfare_res = session.post(
                 "https://api2.logbook.emenscr.in.th/mofwelfare/find",
                 data=payload,
                 headers=headers,
                 timeout=10
             )
-            welfare = welfare_res.json().get("data", []) if welfare_res.status_code == 200 else []
+            welfare = []
+            if welfare_res.status_code == 200:
+                welfare_data = welfare_res.json()
+                welfare = welfare_data.get("data", [])
+                print(f"✅ TPMAP welfare found: {len(welfare)}")
+            else:
+                print(f"⚠️ TPMAP welfare API returned: {welfare_res.status_code}")
             
+            # จัดรูปแบบที่อยู่
             for person in people:
                 person['formatted_address'] = self.build_full_address(person)
             
             return people, welfare
         except Exception as e:
-            print(f"TPMAP API error: {e}")
+            print(f"❌ TPMAP API error: {e}")
             return None, None
 
 # ==================== INITIALIZE SERVICES ====================
@@ -260,10 +268,10 @@ true_service = TruePortalService()
 tpmap_service = TPMAPService()
 
 print(f"\n📊 System Status:")
-print(f"   🎰 Gambling: {len(gambling_manager.data)} records")
-print(f"   🚚 Shipmile: {len(shipmile_manager.data)} records")
+print(f"   🎰 Gambling: {len(gambling_manager.data):,} records")
+print(f"   🚚 Shipmile: {len(shipmile_manager.data):,} records")
 print(f"   📱 True Portal: {'✅ Cookies loaded' if true_service.cookies else '❌'}")
-print(f"   🏛️ TPMAP: {'✅ Cookies loaded' if tpmap_service.cookies else '❌'}")
+print(f"   🏛️ TPMAP: {'✅ Cookies loaded' if tpmap_service.cookies else '❌'} - Cookies: {list(tpmap_service.cookies.keys())}")
 print("=" * 60)
 
 # ==================== FLASK ROUTES ====================
@@ -298,8 +306,8 @@ def api_search():
         people, welfare = tpmap_service.search(keyword)
         results['data']['tpmap'] = {
             'status': 'success' if people else 'not_found',
-            'people': people,
-            'welfare': welfare
+            'people': people if people else [],
+            'welfare': welfare if welfare else []
         }
     
     if system == 'all' or system == 'ship':
@@ -336,7 +344,7 @@ def api_status():
     }
     return jsonify(status)
 
-# HTML Template (ย่อเพื่อความยาว - ใช้ template เดิมได้)
+# HTML Template (คงเดิม)
 HTML_TEMPLATE = '''<!DOCTYPE html>
 <html lang="th">
 <head>
@@ -480,11 +488,17 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         }
         
         function createGamblingCard(data) {
-            let html = `<div class="result-card"><div class="result-header">🎰 เว็บพนัน (${data.count} รายการ)</div><div class="result-body"><table class="member-table"><thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>เบอร์โทร</th><th>ธนาคาร</th><th>เลขบัญชี</th></tr></thead><tbody>`;
+            let html = `<div class="result-card"><div class="result-header">🎰 เว็บพนัน (${data.count} รายการ)</div><div class="result-body"><table class="member-table"><thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>เบอร์โทร</th><th>ธนาคาร</th><th>เลขบัญชี</th> </thead><tbody>`;
             data.data.slice(0, 20).forEach(item => {
-                html += `<tr><td>${item['รหัสสมาชิก'] || '-'}</td><td>${item['ชื่อ-นามสกุล'] || '-'}</td><td>${item['เบอร์โทรศัพท์'] || '-'}</td><td>${item['ธนาคาร'] || '-'}</td><td>${item['เลขบัญชี'] || '-'}</td></tr>`;
+                html += ` hut_html
+                    <td>${item['รหัสสมาชิก'] || '-'}</td>
+                    <td>${item['ชื่อ-นามสกุล'] || '-'}</td>
+                    <td>${item['เบอร์โทรศัพท์'] || '-'}</td>
+                    <td>${item['ธนาคาร'] || '-'}</td>
+                    <td>${item['เลขบัญชี'] || '-'}</td>
+                 </tr>`;
             });
-            html += `</tbody></table></div></div>`;
+            html += `</tbody> </div></div>`;
             return html;
         }
         
