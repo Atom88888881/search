@@ -1,48 +1,30 @@
-# app.py - แก้ไขส่วน TPMAP Service
+# app.py - EasySearch (TPMAP, Shipmile, Gambling)
 from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
-import os
 import re
-import base64
-import pickle
 from datetime import datetime
 
 app = Flask(__name__)
 
 # ==================== CONFIG ====================
-# ใช้ GitHub Releases URLs (ไฟล์ใหญ่)
+# GitHub Releases URLs
 GAMBLING_DATA_URL = "https://github.com/Atom88888881/search/releases/download/w/gambling_data.json"
 SHIPMILE_DATA_URL = "https://github.com/Atom88888881/search/releases/download/w/shipsmile_address.json"
 
-# True Portal Cookies
-TRUE_COOKIES = {
-    "__cf_bm": "sm5sdjrPZzFME2ro3r9q3Z5WWN5YX7dHh4Wge0QbKnk-1774457484.184885-1.0.1.1-tqPVt8B8Ae26bChgntse8FHJrNNzEzcVoxxHH1cetxaiRwJgKIOCjg9SZ3aLV0BfoccB8Sm2wCVfsS0brxs88IiGFIz9PJ9F73FSAhWsULI1siTna6cycuUVpctRI9lG",
-    "_cfuvid": "7yRX5OPCgh8jFy_.dr9gadY8cB5UjvZaduerE2FyQns-1774457483.8987513-1.0.1.1-yRdomrMZO7KHAgBQTkB7qg2izFRBrdYAkYTB9bu4lt0",
-    "JSESSIONID": "w8KyY+19qmYKyOdQ1At3NwDU.SFF_node6",
-    "cf_clearance": "TfNusP6ofDEGGc7zhfZvWcEeKspmdBWj2IOZOjQf43U-1774457484-1.2.1.1-BgbH9yTE3IT4ddtBNidBG1qsw0yk_fEHVRIDBw_3Bu0RWDL06jP.J27peskuV_zCm109B77IpKuXFbrJL2PZPwqA_qQ9.Bhrv6SKdWZE9iRyxAGtTUZ_ln1DNQut2d8zT2oeEv4AwE80HqTNrUvZrfrZQFS6koROkeAFzOu6HDZ7r8irzzWWEc6RkxTZCg.acalATIkuUTBCv6UDWW4u_TfpB9c52CHxMeFLQ_vWOYU",
-    "dealer_prod_session": "6CitXY56FZH8ZMi4k8Vgiw|1774493490|MuH0Uzd5pzj5i4jpE8bMaxOVXro",
-    "NSC_WJQ_UNTBQQS-19180-19181": "ffffffffaf1baadb45525d5f4f58455e445a4a427cdd"
-}
-
-TRUE_USER = "17554398"
-TRUE_API = "https://sff-dealer.truecorp.co.th/profiles/customer/get"
-
-# TPMAP Cookies - ใช้จาก pickle data ที่คุณให้มา
-# สร้าง cookies dictionary โดยตรง
+# TPMAP Cookies
 TPMAP_COOKIES = {
     "_pk_ses.2.6367": "1",
     "_pk_id.2.6367": "13b47b74aa573555.1774459253."
 }
 
-# ==================== DATA MANAGERS (โหลดจาก URL) ====================
+# ==================== DATA MANAGERS ====================
 class GamblingDataManager:
     def __init__(self):
         self.data = []
         self.load_from_url()
     
     def load_from_url(self):
-        """โหลดข้อมูลเว็บพนันจาก GitHub Releases"""
         try:
             print(f"📥 Downloading gambling data from: {GAMBLING_DATA_URL}")
             response = requests.get(GAMBLING_DATA_URL, timeout=60)
@@ -53,13 +35,10 @@ class GamblingDataManager:
                 elif isinstance(json_data, list):
                     self.data = json_data
                 print(f"✅ Gambling data loaded: {len(self.data)} records")
-                return True
             else:
                 print(f"❌ Failed to load: HTTP {response.status_code}")
-                return False
         except Exception as e:
             print(f"❌ Error loading gambling data: {e}")
-            return False
     
     def search(self, keyword):
         results = []
@@ -79,11 +58,7 @@ class GamblingDataManager:
         return results
     
     def get_statistics(self):
-        stats = {'total': len(self.data), 'active_count': 0}
-        for item in self.data:
-            if item.get('สถานะใช้งาน') == 'Active':
-                stats['active_count'] += 1
-        return stats
+        return {'total': len(self.data)}
 
 class ShipmileDataManager:
     def __init__(self):
@@ -91,20 +66,14 @@ class ShipmileDataManager:
         self.load_from_url()
     
     def load_from_url(self):
-        """โหลดข้อมูล Shipmile จาก GitHub Releases"""
         try:
             print(f"📥 Downloading shipmile data from: {SHIPMILE_DATA_URL}")
             response = requests.get(SHIPMILE_DATA_URL, timeout=60)
             if response.status_code == 200:
                 self.data = response.json()
                 print(f"✅ Shipmile data loaded: {len(self.data)} records")
-                return True
-            else:
-                print(f"❌ Failed to load: HTTP {response.status_code}")
-                return False
         except Exception as e:
             print(f"❌ Error loading shipmile data: {e}")
-            return False
     
     def search(self, keyword):
         results = []
@@ -113,68 +82,37 @@ class ShipmileDataManager:
             name = str(item.get('name', '')).lower()
             phone = str(item.get('phone', '')).lower()
             address = str(item.get('address', '')).lower()
-            if (keyword_lower in name or keyword_lower in phone or keyword_lower in address):
+            if keyword_lower in name or keyword_lower in phone or keyword_lower in address:
                 results.append(item)
         return results
 
-# ==================== TRUE PORTAL SERVICE ====================
-class TruePortalService:
-    def __init__(self):
-        self.cookies = TRUE_COOKIES
-        self.user = TRUE_USER
-    
-    def search(self, keyword):
-        if not keyword:
-            return None
-        
-        phone_clean = re.sub(r'\D', '', keyword)
-        if phone_clean and len(phone_clean) == 10:
-            url = f"{TRUE_API}?product-id-number={phone_clean}&product-id-name=msisdn"
-        elif phone_clean and len(phone_clean) == 13:
-            url = f"{TRUE_API}?product-id-number={phone_clean}&product-id-name=citizen-id"
-        else:
-            return None
-        
-        headers = {"channel_alias": "WHS", "employeeid": self.user}
-        try:
-            r = requests.get(url, headers=headers, cookies=self.cookies, timeout=15)
-            if r.status_code == 200:
-                data = r.json()
-                if data.get("response-data"):
-                    return data["response-data"]
-            return None
-        except Exception as e:
-            print(f"True API error: {e}")
-            return None
-
-# ==================== TPMAP SERVICE (ใช้ cookies ที่ถูกต้อง) ====================
+# ==================== TPMAP SERVICE ====================
 class TPMAPService:
     def __init__(self):
         self.cookies = TPMAP_COOKIES
-        print(f"✅ TPMAP cookies loaded: {list(self.cookies.keys())}")
     
     def build_full_address(self, data):
         parts = []
         address_num = str(data.get("address_num", "")) if data.get("address_num") else ""
-        if address_num and address_num != "-" and address_num != "":
+        if address_num and address_num != "-":
             parts.append(address_num)
         moo = str(data.get("moo", "")) if data.get("moo") else ""
-        if moo and moo != "-" and moo != "":
+        if moo and moo != "-":
             parts.append(f"หมู่ {moo}")
         village_name = str(data.get("village_name", "")) if data.get("village_name") else ""
-        if village_name and village_name != "-" and village_name != "":
+        if village_name and village_name != "-":
             parts.append(village_name)
         tumbol_name = str(data.get("tumbol_name", "")) if data.get("tumbol_name") else ""
-        if tumbol_name and tumbol_name != "-" and tumbol_name != "":
+        if tumbol_name and tumbol_name != "-":
             parts.append(f"ตำบล {tumbol_name}")
         ampuhur_name = str(data.get("ampuhur_name", "")) if data.get("ampuhur_name") else ""
-        if ampuhur_name and ampuhur_name != "-" and ampuhur_name != "":
+        if ampuhur_name and ampuhur_name != "-":
             parts.append(f"อำเภอ {ampuhur_name}")
         province_name = str(data.get("province_name", "")) if data.get("province_name") else ""
-        if province_name and province_name != "-" and province_name != "":
+        if province_name and province_name != "-":
             parts.append(f"จังหวัด {province_name}")
         zipcode = str(data.get("zipcode", "")) if data.get("zipcode") else ""
-        if zipcode and zipcode != "-" and zipcode != "":
+        if zipcode and zipcode != "-":
             parts.append(zipcode)
         return " ".join(parts) if parts else "ไม่มีข้อมูลที่อยู่"
     
@@ -182,7 +120,6 @@ class TPMAPService:
         if not keyword:
             return None, None
         
-        # สร้าง session และเพิ่ม cookies
         session = requests.Session()
         session.cookies.update(self.cookies)
         
@@ -218,7 +155,6 @@ class TPMAPService:
         }
         
         try:
-            # ค้นหาข้อมูลบุคคล
             people_res = session.post(
                 "https://api2.logbook.emenscr.in.th/people/find",
                 data=payload,
@@ -229,11 +165,7 @@ class TPMAPService:
             if people_res.status_code == 200:
                 people_data = people_res.json()
                 people = people_data.get("data", [])
-                print(f"✅ TPMAP people found: {len(people)}")
-            else:
-                print(f"⚠️ TPMAP people API returned: {people_res.status_code}")
             
-            # ค้นหาข้อมูลสวัสดิการ
             welfare_res = session.post(
                 "https://api2.logbook.emenscr.in.th/mofwelfare/find",
                 data=payload,
@@ -244,11 +176,7 @@ class TPMAPService:
             if welfare_res.status_code == 200:
                 welfare_data = welfare_res.json()
                 welfare = welfare_data.get("data", [])
-                print(f"✅ TPMAP welfare found: {len(welfare)}")
-            else:
-                print(f"⚠️ TPMAP welfare API returned: {welfare_res.status_code}")
             
-            # จัดรูปแบบที่อยู่
             for person in people:
                 person['formatted_address'] = self.build_full_address(person)
             
@@ -258,21 +186,9 @@ class TPMAPService:
             return None, None
 
 # ==================== INITIALIZE SERVICES ====================
-print("=" * 60)
-print("Initializing EasySearch Services (with GitHub Releases)")
-print("=" * 60)
-
 gambling_manager = GamblingDataManager()
 shipmile_manager = ShipmileDataManager()
-true_service = TruePortalService()
 tpmap_service = TPMAPService()
-
-print(f"\n📊 System Status:")
-print(f"   🎰 Gambling: {len(gambling_manager.data):,} records")
-print(f"   🚚 Shipmile: {len(shipmile_manager.data):,} records")
-print(f"   📱 True Portal: {'✅ Cookies loaded' if true_service.cookies else '❌'}")
-print(f"   🏛️ TPMAP: {'✅ Cookies loaded' if tpmap_service.cookies else '❌'} - Cookies: {list(tpmap_service.cookies.keys())}")
-print("=" * 60)
 
 # ==================== FLASK ROUTES ====================
 @app.route('/')
@@ -283,68 +199,49 @@ def index():
 def api_search():
     data = request.get_json()
     keyword = data.get('keyword', '').strip()
-    system = data.get('system', 'all')
     
     if not keyword:
         return jsonify({'error': 'Keyword is required'}), 400
     
     results = {
         'keyword': keyword,
-        'system': system,
         'timestamp': datetime.now().isoformat(),
         'data': {}
     }
     
-    if system == 'all' or system == 'true':
-        true_data = true_service.search(keyword)
-        results['data']['true_portal'] = {
-            'status': 'success' if true_data else 'not_found',
-            'data': true_data
-        }
+    # TPMAP
+    people, welfare = tpmap_service.search(keyword)
+    results['data']['tpmap'] = {
+        'people': people if people else [],
+        'welfare': welfare if welfare else []
+    }
     
-    if system == 'all' or system == 'tpmap':
-        people, welfare = tpmap_service.search(keyword)
-        results['data']['tpmap'] = {
-            'status': 'success' if people else 'not_found',
-            'people': people if people else [],
-            'welfare': welfare if welfare else []
-        }
+    # Shipmile
+    ship_data = shipmile_manager.search(keyword)
+    results['data']['shipmile'] = {
+        'count': len(ship_data),
+        'data': ship_data[:10]
+    }
     
-    if system == 'all' or system == 'ship':
-        ship_data = shipmile_manager.search(keyword)
-        results['data']['shipmile'] = {
-            'status': 'success' if ship_data else 'not_found',
-            'count': len(ship_data),
-            'data': ship_data[:10]
-        }
-    
-    if system == 'all' or system == 'gambling':
-        gambling_data = gambling_manager.search(keyword)
-        results['data']['gambling'] = {
-            'status': 'success' if gambling_data else 'not_found',
-            'count': len(gambling_data),
-            'data': gambling_data[:50]
-        }
+    # Gambling
+    gambling_data = gambling_manager.search(keyword)
+    results['data']['gambling'] = {
+        'count': len(gambling_data),
+        'data': gambling_data[:50]
+    }
     
     return jsonify(results)
 
 @app.route('/api/status', methods=['GET'])
 def api_status():
-    gambling_stats = gambling_manager.get_statistics()
-    status = {
-        'shipmile': {'loaded': len(shipmile_manager.data) > 0, 'records': len(shipmile_manager.data)},
-        'true_portal': {'authenticated': bool(true_service.cookies)},
-        'tpmap': {'authenticated': bool(tpmap_service.cookies)},
-        'gambling': {
-            'loaded': len(gambling_manager.data) > 0,
-            'records': gambling_stats['total'],
-            'active': gambling_stats['active_count']
-        },
+    return jsonify({
+        'shipmile': {'records': len(shipmile_manager.data)},
+        'gambling': {'records': gambling_manager.get_statistics()['total']},
+        'tpmap': {'configured': True},
         'timestamp': datetime.now().isoformat()
-    }
-    return jsonify(status)
+    })
 
-# HTML Template (คงเดิม)
+# HTML Template
 HTML_TEMPLATE = '''<!DOCTYPE html>
 <html lang="th">
 <head>
@@ -360,14 +257,10 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         .header { text-align: center; color: white; margin-bottom: 30px; }
         .header h1 { font-size: 2.5em; margin-bottom: 10px; }
         .search-box { background: white; border-radius: 20px; padding: 30px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-        .radio-group { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
-        .radio-group label { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; background: #f0f0f0; border-radius: 30px; cursor: pointer; }
         .search-input-area { display: flex; gap: 15px; margin-bottom: 20px; }
         .search-input { flex: 1; padding: 15px 20px; border: 2px solid #ddd; border-radius: 30px; font-size: 16px; font-family: 'Kanit', sans-serif; }
         .search-btn { padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 30px; cursor: pointer; font-size: 16px; font-weight: 600; }
         .status { padding: 15px; background: #f8f9fa; border-radius: 10px; margin-bottom: 20px; }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .stat-card { background: white; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; }
         .results { background: white; border-radius: 20px; padding: 20px; min-height: 400px; }
         .result-card { border: 1px solid #e0e0e0; border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
         .result-header { background: #f8f9fa; padding: 15px 20px; font-weight: 600; border-bottom: 2px solid #667eea; }
@@ -378,29 +271,24 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         .loading { text-align: center; padding: 50px; }
         .spinner { width: 50px; height: 50px; border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1><i class="fas fa-search"></i> AtomSearch</h1>
-            <p>ระบบค้นหาข้อมูลอัจฉริยะ | รองรับ 4 ระบบ</p>
+            <p>ระบบค้นหาข้อมูลอัจฉริยะ | TPMAP | Shipmile | เว็บพนัน</p>
         </div>
         
         <div class="search-box">
-            <div class="radio-group">
-                <label><input type="radio" name="system" value="all" checked> ค้นหาทั้งหมด</label>
-                <label><input type="radio" name="system" value="true"> True CRM</label>
-                <label><input type="radio" name="system" value="tpmap"> TPMAP</label>
-                <label><input type="radio" name="system" value="ship"> Shipmile</label>
-                <label><input type="radio" name="system" value="gambling"> เว็บพนัน</label>
-            </div>
             <div class="search-input-area">
                 <input type="text" id="keyword" class="search-input" placeholder="ชื่อ, เบอร์โทรศัพท์, หรือเลขบัตรประชาชน...">
                 <button id="searchBtn" class="search-btn"><i class="fas fa-search"></i> ค้นหา</button>
             </div>
             <div class="status" id="statusBar">
-                <i class="fas fa-check-circle" style="color: #28a745;"></i> พร้อมใช้งาน
+                <i class="fas fa-check-circle"></i> พร้อมใช้งาน
             </div>
             <div class="stats" id="statsArea">
                 <div class="stat-card">กำลังโหลดข้อมูล...</div>
@@ -434,7 +322,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 updateStatus('กรุณากรอกข้อมูล', 'warning');
                 return;
             }
-            const system = document.querySelector('input[name="system"]:checked').value;
             isSearching = true;
             const searchBtn = document.getElementById('searchBtn');
             searchBtn.disabled = true;
@@ -446,7 +333,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({keyword, system})
+                    body: JSON.stringify({keyword})
                 });
                 const data = await response.json();
                 displayResults(data);
@@ -462,48 +349,74 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         
         function displayResults(data) {
             const container = document.getElementById('resultsContainer');
-            let html = ''; let total = 0;
+            let html = '';
+            let total = 0;
             
-            if (data.data) {
-                if (data.data.gambling?.data?.length) {
-                    total += data.data.gambling.count;
-                    html += createGamblingCard(data.data.gambling);
-                }
-                if (data.data.true_portal?.data) {
-                    total += 1;
-                    html += createResultCard('True CRM', data.data.true_portal.data);
-                }
-                if (data.data.tpmap?.people?.length) {
-                    total += data.data.tpmap.people.length;
-                    html += createResultCard('TPMAP', data.data.tpmap);
-                }
-                if (data.data.shipmile?.data?.length) {
-                    total += data.data.shipmile.count;
-                    html += createResultCard('Shipmile', data.data.shipmile);
-                }
-                if (total === 0) html = '<div style="text-align:center; padding:50px;">ไม่พบข้อมูล</div>';
+            // TPMAP
+            if (data.data.tpmap.people && data.data.tpmap.people.length) {
+                total += data.data.tpmap.people.length;
+                html += createTPMAPCard(data.data.tpmap);
             }
+            
+            // Shipmile
+            if (data.data.shipmile.data && data.data.shipmile.data.length) {
+                total += data.data.shipmile.count;
+                html += createShipmileCard(data.data.shipmile);
+            }
+            
+            // Gambling
+            if (data.data.gambling.data && data.data.gambling.data.length) {
+                total += data.data.gambling.count;
+                html += createGamblingCard(data.data.gambling);
+            }
+            
+            if (total === 0) {
+                html = '<div style="text-align:center; padding:50px;">ไม่พบข้อมูล</div>';
+            }
+            
             container.innerHTML = html;
             document.getElementById('resultCount').innerHTML = `พบ ${total} รายการ`;
         }
         
-        function createGamblingCard(data) {
-            let html = `<div class="result-card"><div class="result-header">🎰 เว็บพนัน (${data.count} รายการ)</div><div class="result-body"><table class="member-table"><thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>เบอร์โทร</th><th>ธนาคาร</th><th>เลขบัญชี</th> </thead><tbody>`;
-            data.data.slice(0, 20).forEach(item => {
-                html += ` hut_html
-                    <td>${item['รหัสสมาชิก'] || '-'}</td>
-                    <td>${item['ชื่อ-นามสกุล'] || '-'}</td>
-                    <td>${item['เบอร์โทรศัพท์'] || '-'}</td>
-                    <td>${item['ธนาคาร'] || '-'}</td>
-                    <td>${item['เลขบัญชี'] || '-'}</td>
-                 </tr>`;
+        function createTPMAPCard(data) {
+            let html = `<div class="result-card"><div class="result-header">🏛️ TPMAP (${data.people.length} คน)</div><div class="result-body">`;
+            data.people.forEach(p => {
+                html += `<div style="margin-bottom: 20px; padding: 10px; border-bottom: 1px solid #eee;">
+                            <strong>ชื่อ:</strong> ${p.name || '-'}<br>
+                            <strong>เลขบัตร:</strong> ${p.NID || '-'}<br>
+                            <strong>ที่อยู่:</strong> ${p.formatted_address || '-'}<br>
+                            <strong>สถานะ:</strong> ${p.status || '-'}
+                         </div>`;
             });
-            html += `</tbody> </div></div>`;
+            if (data.welfare && data.welfare.length) {
+                html += `<div style="margin-top: 20px;"><strong>ข้อมูลสวัสดิการ:</strong><pre style="background:#f0f0f0;padding:10px;margin-top:5px;">${JSON.stringify(data.welfare, null, 2)}</pre></div>`;
+            }
+            html += `</div></div>`;
             return html;
         }
         
-        function createResultCard(title, data) {
-            return `<div class="result-card"><div class="result-header">${title}</div><div class="result-body"><div class="json-viewer"><pre>${JSON.stringify(data, null, 2)}</pre></div></div></div>`;
+        function createShipmileCard(data) {
+            let html = `<div class="result-card"><div class="result-header">🚚 Shipmile (${data.count} รายการ)</div><div class="result-body"><table class="member-table"><thead><tr><th>ชื่อ</th><th>เบอร์โทร</th><th>ที่อยู่</th></tr></thead><tbody>`;
+            data.data.forEach(item => {
+                html += `<tr><td>${item.name || '-'}</td><td>${item.phone || '-'}</td><td>${item.address || '-'}</td></tr>`;
+            });
+            html += `</tbody></table></div></div>`;
+            return html;
+        }
+        
+        function createGamblingCard(data) {
+            let html = `<div class="result-card"><div class="result-header">🎰 เว็บพนัน (${data.count} รายการ)</div><div class="result-body"><table class="member-table"><thead><tr><th>รหัสสมาชิก</th><th>ชื่อ-นามสกุล</th><th>เบอร์โทร</th><th>ธนาคาร</th><th>เลขบัญชี</th></tr></thead><tbody>`;
+            data.data.slice(0, 20).forEach(item => {
+                html += `<tr>
+                            <td>${item['รหัสสมาชิก'] || '-'}</td>
+                            <td>${item['ชื่อ-นามสกุล'] || '-'}</td>
+                            <td>${item['เบอร์โทรศัพท์'] || '-'}</td>
+                            <td>${item['ธนาคาร'] || '-'}</td>
+                            <td>${item['เลขบัญชี'] || '-'}</td>
+                         </tr>`;
+            });
+            html += `</tbody></table></div></div>`;
+            return html;
         }
         
         async function loadStats() {
@@ -513,16 +426,14 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 document.getElementById('statsArea').innerHTML = `
                     <div class="stat-card">🎰 เว็บพนัน: ${status.gambling.records.toLocaleString()} รายการ</div>
                     <div class="stat-card">🚚 Shipmile: ${status.shipmile.records.toLocaleString()} รายการ</div>
-                    <div class="stat-card">📱 True CRM: ${status.true_portal.authenticated ? '✅ พร้อม' : '⚠️ ไม่พร้อม'}</div>
-                    <div class="stat-card">🏛️ TPMAP: ${status.tpmap.authenticated ? '✅ พร้อม' : '⚠️ ไม่พร้อม'}</div>
+                    <div class="stat-card">🏛️ TPMAP: พร้อมใช้งาน</div>
                 `;
             } catch(e) {}
         }
         
         function updateStatus(msg, type) {
             const bar = document.getElementById('statusBar');
-            const icon = type === 'error' ? 'exclamation-circle' : 'info-circle';
-            bar.innerHTML = `<i class="fas fa-${icon}"></i> ${msg}`;
+            bar.innerHTML = `<i class="fas fa-${type === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${msg}`;
         }
         
         loadStats();
@@ -531,8 +442,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
 </body>
 </html>
 '''
-
-app.debug = False
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
